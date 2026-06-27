@@ -28,10 +28,22 @@ app.post("/api/v1/pre-interview", async (req, res) => {
 
     const githubData = await scrapeGithub(githubUsername);
 
+    if (data.userId) {
+        await prisma.user.upsert({
+            where: { id: data.userId },
+            update: { email: data.userEmail || "" },
+            create: {
+                id: data.userId,
+                email: data.userEmail || "",
+            }
+        });
+    }
+
     const interview = await prisma.interview.create({
         data: {
             githubMetadata: JSON.stringify(githubData),
-            status: "Pre"
+            status: "Pre",
+            userId: data.userId || null,
         }
     })
 

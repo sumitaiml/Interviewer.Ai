@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
 import { useNavigate } from "react-router";
+import { supabase } from "../lib/supabaseClient";
 import { 
     ArrowRight, 
     Github, 
@@ -31,10 +32,76 @@ export function Form() {
     const inputRef = useRef<HTMLInputElement>(null);
     const heroSectionRef = useRef<HTMLDivElement>(null);
 
-    // Login modal states
+    // Authentication States
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [isSignUp, setIsSignUp] = useState(false);
+    const [authLoading, setAuthLoading] = useState(false);
+    const [user, setUser] = useState<any>(null);
+
+    // Fetch active session on mount
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }: any) => {
+            setUser(session?.user ?? null);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+            setUser(session?.user ?? null);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    const handleSignOut = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            toast.error(error.message);
+        } else {
+            toast.success("Successfully logged out.");
+            setUser(null);
+        }
+    };
+
+    const handleEmailAuth = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!email.trim() || !password.trim()) {
+            toast.error("Please enter email and password");
+            return;
+        }
+
+        setAuthLoading(true);
+        try {
+            if (isSignUp) {
+                const { data, error } = await supabase.auth.signUp({
+                    email: email.trim(),
+                    password: password.trim(),
+                });
+                if (error) throw error;
+                if (data?.session) {
+                    toast.success("Account created successfully!");
+                    setUser(data.user);
+                    setShowLoginModal(false);
+                } else {
+                    toast.success("Registration successful! Check your email for verification link.");
+                    setShowLoginModal(false);
+                }
+            } else {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email.trim(),
+                    password: password.trim(),
+                });
+                if (error) throw error;
+                toast.success("Welcome back! Login successful.");
+                setUser(data.user);
+                setShowLoginModal(false);
+            }
+        } catch (err: any) {
+            toast.error(err.message || "An authentication error occurred.");
+        } finally {
+            setAuthLoading(false);
+        }
+    };
 
     // Smooth scroll to top input
     const scrollToInput = () => {
@@ -92,6 +159,8 @@ export function Form() {
         try {
             const response = await axios.post(`${BACKEND_URL}/api/v1/pre-interview`, {
                 github: github.trim(),
+                userId: user?.id || null,
+                userEmail: user?.email || null,
             });
             toast.success("GitHub profile analyzed! Directing to voice session...");
             navigate(`/interview/${response.data.id}`);
@@ -138,19 +207,39 @@ export function Form() {
                     </nav>
 
                     <div className="flex items-center gap-3">
-                        <Button 
-                            variant="ghost" 
-                            onClick={() => setShowLoginModal(true)}
-                            className="hidden sm:inline-flex rounded-xl text-sm font-semibold text-zinc-400 hover:text-white hover:bg-zinc-900/50"
-                        >
-                            Log In
-                        </Button>
-                        <Button 
-                            onClick={scrollToInput}
-                            className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 text-sm font-semibold shadow-lg shadow-indigo-500/20 border border-indigo-500/30"
-                        >
-                            Start Free
-                        </Button>
+                        {user ? (
+                            <>
+                                <span className="hidden sm:inline text-xs text-zinc-400 font-semibold max-w-[150px] truncate">
+                                    {user.email}
+                                </span>
+                                <Button 
+                                    variant="ghost" 
+                                    onClick={handleSignOut}
+                                    className="rounded-xl text-sm font-semibold text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+                                >
+                                    Log Out
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <Button 
+                                    variant="ghost" 
+                                    onClick={() => {
+                                        setIsSignUp(false);
+                                        setShowLoginModal(true);
+                                    }}
+                                    className="hidden sm:inline-flex rounded-xl text-sm font-semibold text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+                                >
+                                    Log In
+                                </Button>
+                                <Button 
+                                    onClick={scrollToInput}
+                                    className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 text-sm font-semibold shadow-lg shadow-indigo-500/20 border border-indigo-500/30"
+                                >
+                                    Start Free
+                                </Button>
+                            </>
+                        )}
                     </div>
                 </header>
 
@@ -774,7 +863,7 @@ export function Form() {
                 </footer>
             </section>
 
-            {/* HIGH-FIDELITY INTERACTIVE MOCK LOGIN MODAL */}
+            {/* HIGH-FIDELITY LIVE INTERACTIVE LOGIN MODAL */}
             {showLoginModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
                     {/* Modal container */}
@@ -793,17 +882,24 @@ export function Form() {
                             <div className="mx-auto size-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mb-4">
                                 <Lock className="size-5" />
                             </div>
-                            <h3 className="text-xl font-bold text-white">Welcome Back</h3>
-                            <p className="text-xs text-zinc-500 mt-1">Sign in to access your saved interview scorecard history.</p>
+                            <h3 className="text-xl font-bold text-white">
+                                {isSignUp ? "Create your Account" : "Welcome Back"}
+                            </h3>
+                            <p className="text-xs text-zinc-500 mt-1">
+                                {isSignUp 
+                                    ? "Register for free to save your technical interview history." 
+                                    : "Sign in to access your saved interview scorecard history."}
+                            </p>
                         </div>
 
-                        {/* Input fields */}
-                        <div className="flex flex-col gap-4">
+                        {/* Input form */}
+                        <form onSubmit={handleEmailAuth} className="flex flex-col gap-4">
                             <div className="space-y-1.5">
                                 <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Email Address</label>
                                 <input 
                                     type="email"
                                     value={email}
+                                    required
                                     placeholder="candidate@example.com"
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="w-full h-11 px-4 rounded-xl border border-zinc-800 bg-zinc-900/50 text-sm text-white focus:outline-none focus:border-indigo-500 font-semibold placeholder:text-zinc-600 transition-colors"
@@ -814,41 +910,35 @@ export function Form() {
                                 <input 
                                     type="password"
                                     value={password}
+                                    required
                                     placeholder="••••••••"
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="w-full h-11 px-4 rounded-xl border border-zinc-800 bg-zinc-900/50 text-sm text-white focus:outline-none focus:border-indigo-500 font-semibold placeholder:text-zinc-600 transition-colors"
                                 />
                             </div>
-                        </div>
 
-                        {/* Buttons */}
-                        <div className="flex flex-col gap-3 mt-2">
                             <Button 
-                                onClick={() => {
-                                    toast.success("Welcome back! Mock login successful.");
-                                    setShowLoginModal(false);
-                                }}
-                                className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all"
+                                type="submit"
+                                disabled={authLoading}
+                                className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all flex items-center justify-center gap-2 mt-2"
                             >
-                                Sign In
+                                {authLoading && <Loader2 className="size-4 animate-spin" />}
+                                {isSignUp ? "Sign Up" : "Sign In"}
                             </Button>
-                            <Button 
-                                onClick={() => {
-                                    toast.success("Connected and authenticated with GitHub!");
-                                    setShowLoginModal(false);
-                                }}
-                                variant="outline"
-                                className="w-full h-11 rounded-xl border-zinc-800 bg-zinc-900/40 text-zinc-300 hover:text-white hover:bg-zinc-800 font-bold text-sm flex items-center justify-center gap-2 transition-all"
-                            >
-                                <Github className="size-4" />
-                                Sign in with GitHub
-                            </Button>
-                        </div>
+                        </form>
 
-                        {/* Footer */}
-                        <p className="text-[10px] text-center text-zinc-500">
-                            Don't have an account? Just paste your public GitHub URL on the landing page to start prep instantly for free.
-                        </p>
+                        {/* Toggle links */}
+                        <div className="text-center text-xs mt-1">
+                            <span className="text-zinc-500">
+                                {isSignUp ? "Already have an account? " : "Don't have an account yet? "}
+                            </span>
+                            <button
+                                onClick={() => setIsSignUp(!isSignUp)}
+                                className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors cursor-pointer"
+                            >
+                                {isSignUp ? "Sign In" : "Create Account"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -12,13 +12,23 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id         String      @id
+  email      String      @unique
+  name       String?
+  createdAt  DateTime    @default(now())
+  interviews Interview[]
+}
+
 model Interview {
-  id                String     @id @default(uuid())
+  id                String          @id @default(uuid())
   githubMetadata    Json
   status            InterviewStatus
-  score             Int       @default(0)
+  score             Int             @default(0)
   conversations     Message[]
   feedback          String?
+  userId            String?
+  user              User?           @relation(fields: [userId], references: [id])
 }
 
 model Message {

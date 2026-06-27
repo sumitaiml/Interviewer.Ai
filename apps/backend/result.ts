@@ -25,14 +25,14 @@ const RESULT_PROMPT = `
 
 export async function calculateResult(messages: {type: "Assistant" | "User", message: string, createdAt: Date}[]) {
     const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-2.5-flash",
         contents: RESULT_PROMPT.replace(`{{USER_TRANSCRIPT}}`, JSON.stringify(messages)),
         config: {
-            responseFormat: { text: { mimeType: "application/json", schema: zodToJsonSchema(outputSchema) } },
+            responseMimeType: "application/json",
+            responseSchema: outputSchema,
         },
     });
     console.log(response.text!);
     const result = outputSchema.parse(JSON.parse(response.text!));
     return result;
-
 }
