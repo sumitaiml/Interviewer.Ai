@@ -29,7 +29,7 @@ export async function calculateResult(messages: {type: "Assistant" | "User", mes
         contents: RESULT_PROMPT.replace(`{{USER_TRANSCRIPT}}`, JSON.stringify(messages)),
         config: {
             responseMimeType: "application/json",
-            responseSchema: outputSchema,
+            responseSchema: (outputSchema as any).toJSONSchema(),
         },
     });
     console.log(response.text!);

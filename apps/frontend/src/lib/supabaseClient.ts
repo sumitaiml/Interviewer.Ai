@@ -1,25 +1,36 @@
 import { createClient } from "@supabase/supabase-js";
 
-const getEnvVar = (name: string): string => {
+const getSupabaseUrl = (): string => {
   try {
-    if (typeof import.meta !== "undefined" && (import.meta as any).env) {
-      const env = (import.meta as any).env as Record<string, string | undefined>;
-      if (env[name]) return env[name]!;
-    }
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    if (url) return url;
   } catch (e) {}
 
   try {
-    if (typeof process !== "undefined" && process.env) {
-      const env = process.env as Record<string, string | undefined>;
-      if (env[name]) return env[name]!;
-    }
+    const url = process.env.VITE_SUPABASE_URL;
+    if (url) return url;
   } catch (e) {}
 
-  return "";
+  return "https://rpdmkdzbxdnvmvznexim.supabase.co";
 };
 
-const supabaseUrl = getEnvVar("VITE_SUPABASE_URL") || "https://rpdmkdzbxdnvmvznexim.supabase.co";
-const supabaseAnonKey = getEnvVar("VITE_SUPABASE_ANON_KEY");
+const getSupabaseAnonKey = (): string => {
+  try {
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (key) return key;
+  } catch (e) {}
+
+  try {
+    const key = process.env.VITE_SUPABASE_ANON_KEY;
+    if (key) return key;
+  } catch (e) {}
+
+  return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwZG1rZHpieGRudm12em5leGltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NTI4NTUsImV4cCI6MjA5ODAyODg1NX0.N8-oGllX_TW2Yt5BzsN3fdz2Zrz7ViWZOK-C5Nx3MfM";
+};
+
+
+const supabaseUrl = getSupabaseUrl();
+const supabaseAnonKey = getSupabaseAnonKey();
 
 const createFallbackClient = () => {
   return {

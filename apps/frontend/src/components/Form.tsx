@@ -65,6 +65,7 @@ export function Form() {
 
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
+        console.log("handleEmailAuth called, isSignUp:", isSignUp, "email:", email);
         if (!email.trim() || !password.trim()) {
             toast.error("Please enter email and password");
             return;
@@ -72,11 +73,14 @@ export function Form() {
 
         setAuthLoading(true);
         try {
+            console.log("Calling supabase.auth...");
             if (isSignUp) {
-                const { data, error } = await supabase.auth.signUp({
+                const res = await supabase.auth.signUp({
                     email: email.trim(),
                     password: password.trim(),
                 });
+                console.log("supabase.auth.signUp response:", res);
+                const { data, error } = res;
                 if (error) throw error;
                 if (data?.session) {
                     toast.success("Account created successfully!");
@@ -87,16 +91,19 @@ export function Form() {
                     setShowLoginModal(false);
                 }
             } else {
-                const { data, error } = await supabase.auth.signInWithPassword({
+                const res = await supabase.auth.signInWithPassword({
                     email: email.trim(),
                     password: password.trim(),
                 });
+                console.log("supabase.auth.signInWithPassword response:", res);
+                const { data, error } = res;
                 if (error) throw error;
                 toast.success("Welcome back! Login successful.");
                 setUser(data.user);
                 setShowLoginModal(false);
             }
         } catch (err: any) {
+            console.error("Auth error caught:", err);
             toast.error(err.message || "An authentication error occurred.");
         } finally {
             setAuthLoading(false);

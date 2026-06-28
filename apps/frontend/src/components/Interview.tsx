@@ -43,7 +43,7 @@ export function Interview() {
     const statusRef = useRef<Status>("connecting");
     statusRef.current = status;
 
-    const isAiSpeakingRef = useRef(false);
+    const isInterviewerActiveRef = useRef(false);
 
     // Resources to clean up
     const userStreamRef = useRef<MediaStream | null>(null);
@@ -75,7 +75,7 @@ export function Interview() {
         );
         utterance.voice = preferredVoice || voices.find((v) => v.lang.startsWith("en")) || null;
 
-        isAiSpeakingRef.current = true;
+        isInterviewerActiveRef.current = true;
 
         // Drive the AI volume visualizer
         aiSpeechIntervalRef.current = setInterval(() => {
@@ -89,7 +89,7 @@ export function Interview() {
 
         utterance.onend = () => {
             setAiLevel(0);
-            isAiSpeakingRef.current = false;
+            isInterviewerActiveRef.current = false;
             clearInterval(aiSpeechIntervalRef.current);
             onEnd();
         };
@@ -97,7 +97,7 @@ export function Interview() {
         utterance.onerror = (e) => {
             console.error("Speech synthesis error:", e);
             setAiLevel(0);
-            isAiSpeakingRef.current = false;
+            isInterviewerActiveRef.current = false;
             clearInterval(aiSpeechIntervalRef.current);
             onEnd();
         };
@@ -108,7 +108,7 @@ export function Interview() {
     // Helper: Listen to user voice
     function listenForUser() {
         const recognition = recognitionRef.current;
-        if (!recognition || statusRef.current !== "live" || isAiSpeakingRef.current) return;
+        if (!recognition || statusRef.current !== "live" || isInterviewerActiveRef.current) return;
 
         try {
             recognition.start();
@@ -167,6 +167,13 @@ export function Interview() {
                     const transcript = event.results[0][0].transcript;
                     if (transcript && transcript.trim() && statusRef.current === "live") {
                         console.log("Candidate response:", transcript);
+                        
+                        // Stop listening immediately to prevent overlapping inputs or recording the AI's own voice
+                        isInterviewerActiveRef.current = true;
+                        try {
+                            rec.abort();
+                        } catch (e) {}
+
                         // Send response and get next question
                         try {
                             const res = await axios.post(`${BACKEND_URL}/api/v1/session/chat/${interviewId}`, {
@@ -174,12 +181,14 @@ export function Interview() {
                             });
                             const nextQuestion = res.data.message;
                             speak(nextQuestion, () => {
+                                isInterviewerActiveRef.current = false;
                                 listenForUser();
                             });
                         } catch (err) {
                             console.error("Error sending response:", err);
                             toast("Failed to get response from interviewer.");
                             // Retry listening
+                            isInterviewerActiveRef.current = false;
                             listenForUser();
                         }
                     }
@@ -187,16 +196,12 @@ export function Interview() {
 
                 rec.onerror = (event: any) => {
                     console.warn("Speech recognition warning/error:", event.error);
-                    // Handle silence/no-speech gracefully by restarting
-                    if (event.error === "no-speech" && statusRef.current === "live" && !isAiSpeakingRef.current) {
-                        listenForUser();
-                    }
                 };
 
                 rec.onend = () => {
-                    // Automatically restart listening if AI is not speaking and we are still live
+                    // Automatically restart listening if AI is not speaking/active and we are still live
                     setTimeout(() => {
-                        if (statusRef.current === "live" && !isAiSpeakingRef.current) {
+                        if (statusRef.current === "live" && !isInterviewerActiveRef.current) {
                             listenForUser();
                         }
                     }, 500);
@@ -207,6 +212,7 @@ export function Interview() {
 
             // 3. Contact Backend to Start Interview
             try {
+                isInterviewerActiveRef.current = true;
                 const res = await axios.post(`${BACKEND_URL}/api/v1/session/start/${interviewId}`);
                 if (cancelled) return;
 
@@ -215,12 +221,14 @@ export function Interview() {
 
                 // Welcome user and speak the first question, then start listening
                 speak(firstQuestion, () => {
+                    isInterviewerActiveRef.current = false;
                     listenForUser();
                 });
             } catch (err) {
                 console.error("Error starting interview:", err);
                 toast("Failed to start the interview session. Please try again.");
                 setStatus("connecting");
+                isInterviewerActiveRef.current = false;
             }
         })();
 

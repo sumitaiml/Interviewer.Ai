@@ -36,14 +36,13 @@ export async function generateNextQuestion(
     githubMetadata: string,
     history: { type: "User" | "Assistant"; message: string }[]
 ): Promise<string> {
-    // Format conversation history for Gemini
+    // Format conversation history for Gemini (strictly alternating role: user/model)
     const formattedHistory = history.map(msg => ({
         role: msg.type === "User" ? "user" : "model",
         parts: [{ text: msg.message }]
     }));
 
-    // Append the system instructions and github context to the prompt
-    const prompt = `
+    const systemInstruction = `
     ${SYSTEM_PROMPT}
     
     Candidate's GitHub Metadata:
@@ -57,10 +56,10 @@ export async function generateNextQuestion(
 
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: [
-            ...formattedHistory.map(h => ({ role: h.role, parts: h.parts })),
-            { role: "user", parts: [{ text: prompt }] }
-        ]
+        contents: formattedHistory,
+        config: {
+            systemInstruction: systemInstruction.trim(),
+        }
     });
 
     return response.text?.trim() || "Thank you. Could you elaborate on that?";
